@@ -19,11 +19,15 @@
 
             if (!TryChooseConfigurationFile(out var filePath))
             {
+                Console.WriteLine("Press any key for exit");
+                Console.ReadKey();
                 return;
             }
 
             if (!TryReadFile(filePath, out var constants))
             {
+                Console.WriteLine("Press any key for exit");
+                Console.ReadKey();
                 return;
             }
 
