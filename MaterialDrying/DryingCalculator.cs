@@ -113,8 +113,8 @@ namespace MaterialDrying
             var q_L_star = (T_II_corrector - T_L_star) / _c.delta_x_star; // (26)
             
             // 8 - Приращение
-            var delta_X_I = q_I_corrector * _c.S_te_nu_I * _c.delta_t_star; // (29) TODO q_I_corrector -> q_II_corrector
-            var delta_X_II = q_L_star * _c.S_te_nu_II * _c.delta_t_star; // (30)
+            var delta_X_I = q_I_corrector * Math.Abs(_c.S_te_nu_I) * _c.delta_t_star; // (29) TODO q_I_corrector -> q_II_corrector
+            var delta_X_II = q_L_star * Math.Abs(_c.S_te_nu_II) * _c.delta_t_star; // (30)
 
             // 9 - Новое положение рабочей точки
             var new_X_p_star = previous.X_p_star + delta_X_I + delta_X_II; // (31)
