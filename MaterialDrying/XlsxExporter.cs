@@ -110,7 +110,6 @@ namespace MaterialDrying
             var properties = exportData.GetType()
                                        .GetGenericArguments()[0]
                                        .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                                       .Where(z => z.Name != nameof(ExportData.Step))
                                        .ToArray();
 
             var headerCells = properties.Select((prop, i) => new Cell

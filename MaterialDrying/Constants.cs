@@ -16,7 +16,7 @@ namespace MaterialDrying
         /// <summary>
         /// Кол-во слоев (целое)
         /// </summary>
-        public decimal N { get; set; }
+        public int N { get; set; }
         
         /// <summary>
         /// Стартовое положение рабочей точки
