@@ -137,7 +137,7 @@ namespace MaterialDrying
                     {
                         var T_I_corrector = (previous.Layers[j].T_corrector()
                                              + layer.T_predictor()
-                                             - (_c.delta_t_star * (layer.q_corrector() - layers[j - 1].q_corrector()))
+                                             - (_c.delta_t_star * (layer.q_corrector() - layers[j - 1].q_corrector())) / _c.delta_x_star 
                                              + (_c.delta_t_star * Q_nu_I_star))
                                             / 2m; // (19)
 
@@ -154,7 +154,7 @@ namespace MaterialDrying
                     {
                         var T_II_corrector = (previous.Layers[j].T_corrector()
                                               + layer.T_predictor()
-                                              - (_c.delta_t_star * (layer.q_corrector() - layers[j - 1].q_corrector()))
+                                              - (_c.delta_t_star * (layer.q_corrector() - layers[j - 1].q_corrector())) / _c.delta_x_star
                                               + (_c.delta_t_star * (Q_nu_II_star + (N_w_star * layer.q_corrector()))))
                                              / 2m; // (21)
 
