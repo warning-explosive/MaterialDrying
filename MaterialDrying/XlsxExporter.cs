@@ -41,7 +41,7 @@ namespace MaterialDrying
                                                             [25] = "Z",
                                                         };
         
-        public void Export(string fileName, IEnumerable<ExportData> exportData)
+        public void Export(string fileName, IEnumerable<Frame> exportData)
         {
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName + ".xlsx");
 
@@ -78,15 +78,15 @@ namespace MaterialDrying
             }
         }
 
-        private void InsertData(IEnumerable<ExportData> exportData,
+        private void InsertData(IEnumerable<Frame> exportData,
                                 SheetData sheetData,
                                 PropertyInfo[] propertyInfos)
         {
             var rows = exportData.Select(data =>
                                          {
-                                             var rowIndex = data.Step + 2;
+                                             var rowIndex = data.Index + 2;
                                              
-                                             var row = new Row { RowIndex = rowIndex };
+                                             var row = new Row { RowIndex = (uint)rowIndex };
 
                                              var cells = propertyInfos.Select((p, i) => new Cell
                                                                             {
@@ -103,7 +103,7 @@ namespace MaterialDrying
             sheetData.Append(rows);
         }
 
-        private PropertyInfo[] InsertHeader(IEnumerable<ExportData> exportData, SheetData sheetData)
+        private PropertyInfo[] InsertHeader(IEnumerable<Frame> exportData, SheetData sheetData)
         {
             var headerRow = new Row { RowIndex = 1 };
 

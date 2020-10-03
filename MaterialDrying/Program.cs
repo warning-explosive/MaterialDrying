@@ -35,8 +35,9 @@
             sw.Start();
             var exportData = new DryingCalculator(constants).Calculate();
             sw.Stop();
-            Console.WriteLine($"\nTOTAL CALCULATION TIME: {sw.ElapsedMilliseconds}ms");
             
+            Console.WriteLine($"\nTOTAL CALCULATION TIME: {sw.ElapsedMilliseconds}ms");
+            Console.WriteLine($"ITERATIONS: {exportData.Count}");
             Export(exportData, Path.GetFileNameWithoutExtension(filePath));
 
             Console.WriteLine("Press any key for exit");
@@ -47,7 +48,7 @@
         {
             filePath = string.Empty;
             
-            var files = Directory.GetFiles(AppDomain.CurrentDomain?.BaseDirectory, "*.yaml", SearchOption.TopDirectoryOnly);
+            var files = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "*.yaml", SearchOption.TopDirectoryOnly);
 
             if (!files.Any())
             {
@@ -117,8 +118,7 @@
                            .Deserialize<Constants>(serialized);
 
                 Console.WriteLine($"\nUSED PHYSICAL PARAMETERS FOR: {Path.GetFileNameWithoutExtension(filePath)}");
-                foreach (var prop in constants.GetType()
-                                              .GetProperties(BindingFlags.Instance | BindingFlags.Public))
+                foreach (var prop in constants.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
                 {
                     Console.WriteLine($"{prop.Name}: {prop.GetValue(constants)}");
                 }
@@ -146,7 +146,7 @@
             return buffer;
         }
 
-        private static void Export(IEnumerable<ExportData> exportData, string fileName)
+        private static void Export(IEnumerable<Frame> exportData, string fileName)
         {
             try
             {

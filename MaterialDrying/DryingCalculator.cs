@@ -3,6 +3,7 @@ namespace MaterialDrying
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
 
     public class DryingCalculator
@@ -14,204 +15,170 @@ namespace MaterialDrying
             _c = constants;
         }
 
-        public IEnumerable<ExportData> Calculate()
+        public ICollection<Frame> Calculate()
         {
-            var initialFrontPosition = Init();
+            var collection = new List<Frame>();
 
-            var position = initialFrontPosition;
-            uint currentStep = 0;
-
-            /*
-             * Пересчет временного ограничения в кол-во итераций
-             */
-            var cutOffTime = (uint)decimal.Round(_c.DryingTime / _c.delta_t, MidpointRounding.AwayFromZero);
-            Console.WriteLine($"\nCutOff time: {cutOffTime} iterations");
+            CalculateFirstPeriod(collection);
+            CalculateSecondPeriod(collection);
             
-            var result = new List<ExportData>((int)cutOffTime);
-            
-            /*
-             * Продолжаем считать если не дошли до дна стакана
-             *     исходя из области определения T-корректора стакана считаем 1й слой материала
-             * И
-             * не превышено ограничение по времени
-             */
-            while (position.j_p > 1
-                   && position.j_p < 49
-                   && currentStep < cutOffTime)
-            {
-                /*
-                 * Расчет следущего состояния
-                 */
-                Console.WriteLine($"Time step: {currentStep}");
-                position = Calculate(currentStep, position, out var exportData);
-                result.Add(exportData);
-
-                ++currentStep;
-            }
-
-            return result;
+            return collection;
         }
 
-        private Iteration Init()
+        private Frame CalculateFirstPeriod(ICollection<Frame> frames)
         {
-            /*
-             * Задаем начальные температуры и положение рабочей точки
-             */
-            var initialFrontPosition = new Iteration(_c,
-                                                     _c.T_s_eq,
-                                                     _c.T_s_eq,
-                                                     _c.X_p_start / _c.L,
-                                                     _c.W_p_star,
-                                                     _c.X_p_start);
-
-            foreach (var layer in initialFrontPosition.Layers)
+            ulong i = 1;
+            var prev = new Frame(0,
+                                 253.15m,
+                                 1m,
+                                 1m,
+                                 1m,
+                                 1m,
+                                 253.15m,
+                                 253.15m,
+                                 0.99m,
+                                 0.0131m,
+                                 0m);
+            frames.Add(prev);
+            
+            for (;
+                FirstPeriodExitCondition(prev) || i == uint.MaxValue;
+                 ++i)
             {
-                layer.q_I_predictor = 0;
-                layer.T_I_corrector = Conversions.T_I_to_star(_c, _c.T_s_eq);
+                // 1
+                var TI_predictor = prev.TI_predictor + _c.del_t_bezr * _c.Q_I_bezr;
                 
-                layer.q_II_predictor = 0;
-                layer.T_II_corrector = Conversions.T_II_to_star(_c, _c.T_s_eq);
+                // 2
+                var TII_predictor = prev.TII_predictor + _c.del_t_bezr * _c.Q_II_bezr;
+                
+                // 3
+                var qv_I_corrector = (TI_predictor - TII_predictor) / _c.del_x_bezr;
+                
+                // 4
+                var del_W_1 = _c.del_t_bezr * (qv_I_corrector) * _c.Ste_I;
+                
+                // 5
+                var del_W_2 = _c.del_t_bezr * (qv_I_corrector) * _c.Ste_II;
+                
+                // 6
+                var W_bezr = del_W_1 + del_W_2 + prev.W_bezr;
+                
+                // 7
+                var Wp_new = W_bezr * (_c.Wp_primary - _c.Weq_primary) + _c.Weq_primary;
+                
+                // 8
+                var Tnext = _c.a_e * _c.del_tr * (_c.T_shelf(i) - 2m * prev.Tnext + _c.T_shelf(i)) / (_c.del_X * _c.del_X) + prev.Tnext;
+                
+                // 9
+                var Tpred = _c.a_e * _c.del_tr * (_c.T_shelf(i) - 2m * prev.Tpred + Tnext) / (_c.del_X * _c.del_X) + prev.Tpred;
+                
+                // 10
+                var Tm = _c.a_e * _c.del_tr * (Tnext - 2m * prev.Tm + Tpred) / (_c.del_X * _c.del_X) + prev.Tm;
+                
+                var curr = new Frame(i,
+                                     Tm,
+                                     TI_predictor,
+                                     TII_predictor,
+                                     prev.TI_corrector,
+                                     prev.TII_corrector,
+                                     Tpred,
+                                     Tnext,
+                                     W_bezr,
+                                     prev.t_bezrazm,
+                                     Wp_new);
+                prev = curr;
+                frames.Add(curr);
             }
 
-            return initialFrontPosition;
+            return prev;
         }
 
-        private Iteration Calculate(uint step, Iteration previous, out ExportData exportData)
+        private bool FirstPeriodExitCondition(Frame prev)
         {
-            // 1 - Расчет Q
-            var Q_nu_I = ((_c.Mu_1_I * previous.T_I_avg) + _c.Mu_2_I) * _c.E * _c.E; // (7)
-            var Q_nu_I_star = ((Q_nu_I * _c.L * _c.L) / _c.K_e_I) / (_c.T_s_eq - _c.T_s_3); // (8)
-            var Q_nu_II = ((_c.Mu_1_II * previous.T_II_avg) + _c.Mu_2_II) * _c.E * _c.E; // (9)
-            var Q_nu_II_star = ((Q_nu_II * _c.L * _c.L) / _c.K_e_II) / (_c.T_s_eq - _c.T_II_ref); // (10)
-            
-            // 2 - Расчет N_w
-            var delta_X_p = previous.previous_X_p - previous.X_p;
-            var N_w = ((_c.W_p - _c.W_eq) * _c.Ro_vi_II * delta_X_p) / _c.delta_t; // (12)
-            var N_w_star = (_c.L * _c.C_p_w * N_w) / _c.K_e_II; // (13)
+            return Equals(prev.Wp_new, _c.Weq, _c.eps);
+        }
 
-            var layers = Iteration.InitLayers(previous.j_p, _c);
+        private void CalculateSecondPeriod(ICollection<Frame> frames)
+        {
+            var prev = frames.Last();
+            var i = prev.Index;
 
-            for (var j = 0; j < _c.N; ++j)
+            for (;
+                SecondPeriodExitCondition(prev) || i == uint.MaxValue;
+                ++i)
             {
-                var layer = layers[j];
-
-                decimal q_predictor() => (previous.Layers[j].T_corrector() - previous.Layers[j + 1].T_corrector()) / _c.delta_x_star; // (14), (16)
-                decimal q_corrector() => (layers[j - 1].T_predictor() - layer.T_predictor()) / _c.delta_x_star; // (18), (20)
+                // 1
+                var Tnext = _c.a_e * _c.delta_t * (_c.T_shelf(i) - 2m * prev.Tnext + _c.T_shelf(i)) / (_c.del_X * _c.del_X) + prev.Tnext;
                 
-                // 3 - Шаг предиктора I
-                if (layer.is_q_I_predictor())
-                {
-                    layer.q_I_predictor = q_predictor();
-
-                    if (layer.is_T_I_predictor())
-                    {
-                        var T_I_predictor = previous.Layers[j].T_corrector()
-                                            + (_c.delta_t_star * Q_nu_I_star)
-                                            - ((_c.delta_t_star * (previous.Layers[j + 1].q_predictor() - previous.Layers[j].q_predictor())) / _c.delta_x_star); // (15)
-
-                        layer.T_I_predictor = T_I_predictor;
-                    }
-                }
+                // 2 
+                var Tpred = _c.a_e * _c.delta_t * (_c.T_shelf(i) - 2m * prev.Tpred + Tnext) / (_c.del_X * _c.del_X) + prev.Tpred;
                 
-                // 3 - Шаг предиктора II
-                if (layer.is_T_II_predictor())
-                {
-                    if (layer.is_q_II_predictor())
-                    {
-                        layer.q_II_predictor = q_predictor();
-                    }
-                    
-                    var T_II_predictor = previous.Layers[j].T_corrector()
-                                         + (_c.delta_t_star * (Q_nu_II_star + (N_w_star * previous.Layers[j].q_predictor())))
-                                         - ((_c.delta_t_star * (previous.Layers[j + 1].q_predictor() - previous.Layers[j].q_predictor())) / _c.delta_x_star); // (17)
-
-                    layer.T_II_predictor = T_II_predictor;
-                }
+                // 3
+                var Tm = _c.a_e * _c.delta_t * (Tnext - 2m * prev.Tm + Tpred) / (_c.del_X * _c.del_X) + prev.Tm;
                 
-                // 3 - Шаг корректора I
-                if (layer.is_q_I_corrector())
-                {
-                    layer.q_I_corrector = q_corrector(); // (18)
-
-                    if (layer.is_T_I_corrector())
-                    {
-                        var T_I_corrector = (previous.Layers[j].T_corrector()
-                                             + layer.T_predictor()
-                                             - (_c.delta_t_star * (layer.q_corrector() - layers[j - 1].q_corrector())) / _c.delta_x_star 
-                                             + (_c.delta_t_star * Q_nu_I_star))
-                                            / 2m; // (19)
-
-                        layer.T_I_corrector = T_I_corrector;
-                    }
-                }
-
-                // 3 - Шаг корректора II
-                if (layer.is_q_II_corrector())
-                {
-                    layer.q_II_corrector = q_corrector(); // (20)
-                            
-                    if (layer.is_T_II_corrector())
-                    {
-                        var T_II_corrector = (previous.Layers[j].T_corrector()
-                                              + layer.T_predictor()
-                                              - (_c.delta_t_star * (layer.q_corrector() - layers[j - 1].q_corrector())) / _c.delta_x_star
-                                              + (_c.delta_t_star * (Q_nu_II_star + (N_w_star * layer.q_corrector()))))
-                                             / 2m; // (21)
-
-                        layer.T_II_corrector = T_II_corrector;
-                    }
-                }
+                // 4
+                var Dk = 1.0638m * _c.rp * Sqrt(_c.Rgaz * Tm / _c.M);
+                
+                // 5
+                var Ds = _c.Dso * Exp(- _c.Eo / (_c.Rgaz * Tm));
+                
+                // 6
+                var nominator = _c.Wo * Exp(_c.const_a / Tm);
+                var dn_part = prev.Wp_new - _c.Wo * Exp(_c.const_a / Tm);
+                var denominator = _c.const_b * Exp(_c.const_c / Tm) * _c.P * dn_part * dn_part;
+                var Y_w = nominator / denominator;
+                
+                // 7
+                var Deff = Ds + Dk * _c.e_por * _c.M * Y_w / _c.Ro_II;
+                
+                // 8
+                var Ki = 60m * Deff / (_c.dz * _c.dz);
+                
+                // 9
+                var t_bezrazm = prev.t_bezrazm + 0.0131m;
+                
+                // 10
+                var W_bezr = Exp(- _c.Lm * _c.Lm * Ki * t_bezrazm / _c.a_e);
+                
+                // 11
+                var Wp_new = W_bezr * (_c.Wp_secondary - _c.Weq_secondary) +_c.Weq_secondary;
+                
+                var curr = new Frame(i,
+                                     Tm,
+                                     prev.TI_predictor,
+                                     prev.TII_predictor,
+                                     prev.TI_corrector,
+                                     prev.TII_corrector,
+                                     Tpred,
+                                     Tnext,
+                                     W_bezr,
+                                     t_bezrazm,
+                                     Wp_new);
+                prev = curr;
+                frames.Add(curr);
             }
+        }
 
-            // 4 - Получаем средние температуры слоев
-            var T_I_corrector_avg = layers.Where(z => z.is_T_I_corrector()).Select(z => z.T_I_corrector.Value).Average();
-            var T_II_corrector_avg = layers.Where(z => z.is_T_II_corrector()).Select(z => z.T_II_corrector.Value).Average();
-            
-            // 5 - Переводим температуры слоев материала в размерный вид
-            var T_I_avg_converted = Conversions.T_I_to_dimensional(_c, T_I_corrector_avg); // (22)
-            var T_II_avg_converted = Conversions.T_II_to_dimensional(_c, T_II_corrector_avg); // (23)
-            
-            // 6 - Приращение
-            var delta_X_I = layers[previous.j_p].q_corrector() * _c.S_te_nu_I * _c.delta_t_star; // (29)
-            var delta_X_II = layers[previous.j_p].q_corrector() * _c.S_te_nu_II * _c.delta_t_star; // (30)
-            var abs_delta_sum = Math.Abs(delta_X_I + delta_X_II);
-            
-            
-            // 7 - Новое положение рабочей точки
-            var new_X_p_star = previous.X_p_star - abs_delta_sum; // (31)
-            var new_W_p_star = previous.W_p_star - abs_delta_sum; // (32)
+        private bool SecondPeriodExitCondition(Frame prev)
+        {
+            return Equals(prev.Wp_new, _c.Weq_secondary, _c.eps);
+        }
 
-            var iteration = new Iteration(_c,
-                                          T_I_avg_converted,
-                                          T_II_avg_converted,
-                                          new_X_p_star,
-                                          new_W_p_star,
-                                          previous.X_p,
-                                          layers);
-            
-            exportData = new ExportData
-            {
-                Step = step,
-                
-                j_p = iteration.j_p,
-                X_p = iteration.X_p,
-                X_p_star = iteration.X_p_star,
-                W_p_star = iteration.W_p_star,
-                
-                delta_X_I = delta_X_I,
-                delta_X_II = delta_X_II,
-                abs_delta_sum = abs_delta_sum,
-                
-                q_p_corrector = layers[previous.j_p].q_corrector(),
-                
-                T_I_avg = T_I_avg_converted,
-                T_I_star_avg = T_I_corrector_avg,
-                
-                T_II_avg = T_II_avg_converted,
-                T_II_star_avg = T_II_corrector_avg,
-            };
+        private static decimal Exp(decimal power)
+        {
+            return (decimal) Math.Exp((double) power);
+        }
 
-            return iteration;
+        private static decimal Sqrt(decimal number)
+        {
+            return (decimal) Math.Sqrt((double) number);
+        }
+
+        public static bool Equals(decimal x, decimal target, decimal eps)
+        {
+            Debug.Assert(eps > 0m, "eps must be positive decimal number!");
+
+            return target - eps <= x && x <= target + eps;
         }
     }
 }
