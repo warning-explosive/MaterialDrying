@@ -37,7 +37,7 @@
             sw.Stop();
             
             Console.WriteLine($"\nTOTAL CALCULATION TIME: {sw.ElapsedMilliseconds}ms");
-            Console.WriteLine($"ITERATIONS: {exportData.Count}");
+            Console.WriteLine($"EXPORT DATA TO EXCEL: {exportData.Count}");
             Export(exportData, Path.GetFileNameWithoutExtension(filePath));
 
             Console.WriteLine("Press any key for exit");

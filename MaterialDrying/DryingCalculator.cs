@@ -19,13 +19,18 @@ namespace MaterialDrying
         {
             var collection = new List<Frame>();
 
-            CalculateFirstPeriod(collection);
-            CalculateSecondPeriod(collection);
+            CalculateFirstPeriod(collection, Report);
+            Console.WriteLine("First period was calculated.");
+            
+            CalculateSecondPeriod(collection, Report);
+            Console.WriteLine("Second period was calculated.");
             
             return collection;
         }
 
-        private Frame CalculateFirstPeriod(ICollection<Frame> frames)
+        void Report(Frame frame) => Console.WriteLine($"{nameof(Frame.Index)} = {frame.Index}; {nameof(Frame.Wp_new)} = {frame.Wp_new}; {nameof(Constants.T_shelf)} = {_c.T_shelf(frame.Index)}; {nameof(Frame.Tm)} = {frame.Tm}");
+        
+        private void CalculateFirstPeriod(ICollection<Frame> frames, Action<Frame> report)
         {
             ulong i = 1;
             var prev = new Frame(0,
@@ -38,12 +43,13 @@ namespace MaterialDrying
                                  253.15m,
                                  0.99m,
                                  0.0131m,
-                                 0m);
+                                 _c.Wp_primary);
             frames.Add(prev);
+            report(prev);
             
             for (;
-                FirstPeriodExitCondition(prev) || i == uint.MaxValue;
-                 ++i)
+                FirstPeriodRunCondition(prev) && i < ulong.MaxValue;
+                ++i)
             {
                 // 1
                 var TI_predictor = prev.TI_predictor + _c.del_t_bezr * _c.Q_I_bezr;
@@ -88,23 +94,23 @@ namespace MaterialDrying
                                      Wp_new);
                 prev = curr;
                 frames.Add(curr);
+                report(curr);
             }
-
-            return prev;
         }
 
-        private bool FirstPeriodExitCondition(Frame prev)
+        private bool FirstPeriodRunCondition(Frame prev)
         {
-            return Equals(prev.Wp_new, _c.Weq, _c.eps);
+            Debug.Assert(_c.eps > 0m, "eps must be positive decimal number!");
+            return prev.Wp_new > _c.Weq + _c.eps;
         }
 
-        private void CalculateSecondPeriod(ICollection<Frame> frames)
+        private void CalculateSecondPeriod(ICollection<Frame> frames, Action<Frame> report)
         {
             var prev = frames.Last();
             var i = prev.Index;
 
             for (;
-                SecondPeriodExitCondition(prev) || i == uint.MaxValue;
+                SecondPeriodRunCondition(prev) && i < ulong.MaxValue;
                 ++i)
             {
                 // 1
@@ -156,12 +162,14 @@ namespace MaterialDrying
                                      Wp_new);
                 prev = curr;
                 frames.Add(curr);
+                report(curr);
             }
         }
 
-        private bool SecondPeriodExitCondition(Frame prev)
+        private bool SecondPeriodRunCondition(Frame prev)
         {
-            return Equals(prev.Wp_new, _c.Weq_secondary, _c.eps);
+            Debug.Assert(_c.eps > 0m, "eps must be positive decimal number!");
+            return prev.Wp_new > _c.Weq_secondary + _c.eps;
         }
 
         private static decimal Exp(decimal power)
@@ -172,13 +180,6 @@ namespace MaterialDrying
         private static decimal Sqrt(decimal number)
         {
             return (decimal) Math.Sqrt((double) number);
-        }
-
-        public static bool Equals(decimal x, decimal target, decimal eps)
-        {
-            Debug.Assert(eps > 0m, "eps must be positive decimal number!");
-
-            return target - eps <= x && x <= target + eps;
         }
     }
 }
