@@ -43,7 +43,9 @@ namespace MaterialDrying
                                  253.15m,
                                  0.99m,
                                  0.0131m,
-                                 _c.Wp_primary);
+                                 _c.Wp_primary,
+                                 _c.delta_t,
+                                 _c.T_shelf(i));
             frames.Add(prev);
             report(prev);
             
@@ -51,6 +53,8 @@ namespace MaterialDrying
                 FirstPeriodRunCondition(prev) && i < ulong.MaxValue;
                 ++i)
             {
+                var t_shelf = _c.T_shelf(i);
+                
                 // 1
                 var TI_predictor = prev.TI_predictor + _c.del_t_bezr * _c.Q_I_bezr;
                 
@@ -73,10 +77,10 @@ namespace MaterialDrying
                 var Wp_new = W_bezr * (_c.Wp_primary - _c.Weq_primary) + _c.Weq_primary;
                 
                 // 8
-                var Tnext = _c.a_e * _c.del_tr * (_c.T_shelf(i) - 2m * prev.Tnext + _c.T_shelf(i)) / (_c.del_X * _c.del_X) + prev.Tnext;
+                var Tnext = _c.a_e * _c.del_tr * (t_shelf - 2m * prev.Tnext + t_shelf) / (_c.del_X * _c.del_X) + prev.Tnext;
                 
                 // 9
-                var Tpred = _c.a_e * _c.del_tr * (_c.T_shelf(i) - 2m * prev.Tpred + Tnext) / (_c.del_X * _c.del_X) + prev.Tpred;
+                var Tpred = _c.a_e * _c.del_tr * (t_shelf - 2m * prev.Tpred + Tnext) / (_c.del_X * _c.del_X) + prev.Tpred;
                 
                 // 10
                 var Tm = _c.a_e * _c.del_tr * (Tnext - 2m * prev.Tm + Tpred) / (_c.del_X * _c.del_X) + prev.Tm;
@@ -91,7 +95,9 @@ namespace MaterialDrying
                                      Tnext,
                                      W_bezr,
                                      prev.t_bezrazm,
-                                     Wp_new);
+                                     Wp_new,
+                                     _c.delta_t,
+                                     t_shelf);
                 prev = curr;
                 frames.Add(curr);
                 report(curr);
@@ -113,11 +119,13 @@ namespace MaterialDrying
                 SecondPeriodRunCondition(prev) && i < ulong.MaxValue;
                 ++i)
             {
+                var t_shelf = _c.T_shelf(i);
+                
                 // 1
-                var Tnext = _c.a_e * _c.delta_t * (_c.T_shelf(i) - 2m * prev.Tnext + _c.T_shelf(i)) / (_c.del_X * _c.del_X) + prev.Tnext;
+                var Tnext = _c.a_e * _c.delta_t * (t_shelf - 2m * prev.Tnext + t_shelf) / (_c.del_X * _c.del_X) + prev.Tnext;
                 
                 // 2 
-                var Tpred = _c.a_e * _c.delta_t * (_c.T_shelf(i) - 2m * prev.Tpred + Tnext) / (_c.del_X * _c.del_X) + prev.Tpred;
+                var Tpred = _c.a_e * _c.delta_t * (t_shelf - 2m * prev.Tpred + Tnext) / (_c.del_X * _c.del_X) + prev.Tpred;
                 
                 // 3
                 var Tm = _c.a_e * _c.delta_t * (Tnext - 2m * prev.Tm + Tpred) / (_c.del_X * _c.del_X) + prev.Tm;
@@ -159,7 +167,9 @@ namespace MaterialDrying
                                      Tnext,
                                      W_bezr,
                                      t_bezrazm,
-                                     Wp_new);
+                                     Wp_new,
+                                     _c.delta_t,
+                                     t_shelf);
                 prev = curr;
                 frames.Add(curr);
                 report(curr);

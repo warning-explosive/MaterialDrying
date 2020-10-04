@@ -12,7 +12,9 @@ namespace MaterialDrying
                      decimal tnext,
                      decimal w_bezr,
                      decimal T_bezrazm,
-                     decimal wp_new)
+                     decimal wp_new,
+                     decimal delta_t,
+                     decimal t_shelf)
         {
             Index = index;
             Tm = tm;
@@ -25,9 +27,15 @@ namespace MaterialDrying
             W_bezr = w_bezr;
             t_bezrazm = T_bezrazm;
             Wp_new = wp_new;
+            Time = index * delta_t;
+            T_Shelf = t_shelf;
         }
 
         public ulong Index { get; }
+
+        public decimal Time { get; }
+
+        public decimal T_Shelf { get; }
 
         public decimal Tm { get; }
         
